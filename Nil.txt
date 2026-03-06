@@ -1,52 +1,44 @@
 import os
 import sys
 
-# 1. SETUP - Use your exact Spark folder
+# 1. PATHS (Verify these are exactly correct on your PC)
+java_home = r'C:\Program Files\Java\jre1.8.0' 
 spark_home = r'C:\Spark\spark-4.1.1-bin-hadoop3'
-java_home = r'C:\Program Files\Java\jdk-25' 
 
-# 2. BRUTE FORCE PATH INJECTION
-# We add the python folder AND the lib folder directly to the system path
-pyspark_path = os.path.join(spark_home, 'python')
-lib_path = os.path.join(spark_home, 'python', 'lib')
-
-sys.path.insert(0, pyspark_path)
-
-# Find the py4j zip file and add it specifically
-if os.path.exists(lib_path):
-    for file in os.listdir(lib_path):
-        if file.startswith("py4j") and file.endswith(".zip"):
-            sys.path.insert(0, os.path.join(lib_path, file))
-            print(f"Found Bridge: {file}")
-
-# 3. SET THE ENVIRONMENT (Temporary - No Admin)
+# 2. ENVIRONMENT (In-Memory Only)
 os.environ['JAVA_HOME'] = java_home
 os.environ['SPARK_HOME'] = spark_home
 os.environ['PYSPARK_PYTHON'] = sys.executable
-os.environ['PYSPARK_DRIVER_PYTHON'] = sys.executable
 
-# 4. THE IMPORT TEST
+# Add Java to the path so Spark can find 'java.exe'
+os.environ['PATH'] = os.path.join(java_home, 'bin') + os.path.pathsep + os.environ.get('PATH', '')
+
+# 3. PATH INJECTION
+sys.path.insert(0, os.path.join(spark_home, 'python'))
+lib_path = os.path.join(spark_home, 'python', 'lib')
+for file in os.listdir(lib_path):
+    if file.startswith("py4j"):
+        sys.path.insert(0, os.path.join(lib_path, file))
+
+# 4. START THE ENGINE WITH "STEALTH" MODE
+from pyspark.sql import SparkSession
+
 try:
-    print("Testing import...")
-    import pyspark
-    from pyspark.sql import SparkSession
-    print("Import Successful!")
+    print("Attempting Stealth Connection...")
     
-    # Start the session with Zscaler-friendly settings
     spark = SparkSession.builder \
-        .master("local") \
+        .master("local[1]") \
+        .appName("CorporateBypass") \
         .config("spark.driver.host", "127.0.0.1") \
+        .config("spark.driver.bindAddress", "127.0.0.1") \
         .config("spark.ui.enabled", "false") \
+        .config("spark.driver.extraJavaOptions", "-Djava.net.preferIPv4Stack=true") \
         .getOrCreate()
-        
-    spark.range(5).show()
-    print("--- FULL SUCCESS ---")
 
-except ModuleNotFoundError:
-    print("FAILED: Python still can't see the 'pyspark' folder.")
-    print(f"I looked in: {pyspark_path}")
-    # Let's check if the folder actually exists
-    if not os.path.exists(os.path.join(pyspark_path, 'pyspark')):
-        print("ALERT: The 'pyspark' subfolder is MISSING from your Spark directory!")
+    print("\n--- CONNECTION SUCCESSFUL ---")
+    spark.range(1).show()
+
 except Exception as e:
-    print(f"Connection Error: {e}")
+    print("\n--- DIAGNOSTIC DATA ---")
+    print(f"Error Type: {type(e).__name__}")
+    print(f"Message: {e}")
