@@ -1,0 +1,47 @@
+import os
+import sys
+
+# 1. POINT TO THE NEW JAVA 8 FOLDER
+# Double-check if there is a 'bin' folder inside this path!
+java_home = r'C:\Program Files\Java\jre1.8.0' 
+spark_home = r'C:\Spark\spark-4.1.1-bin-hadoop3'
+
+# 2. IN-MEMORY ENVIRONMENT (Temporary - No Admin)
+os.environ['JAVA_HOME'] = java_home
+os.environ['SPARK_HOME'] = spark_home
+os.environ['PYSPARK_PYTHON'] = sys.executable
+
+# Add Java 8 to the start of the search path
+os.environ['PATH'] = os.path.join(java_home, 'bin') + os.path.pathsep + os.environ.get('PATH', '')
+
+# 3. ATTACH SPARK TO PYTHON
+sys.path.insert(0, os.path.join(spark_home, 'python'))
+lib_path = os.path.join(spark_home, 'python', 'lib')
+for file in os.listdir(lib_path):
+    if file.startswith("py4j"):
+        sys.path.insert(0, os.path.join(lib_path, file))
+
+# 4. START THE ENGINE
+from pyspark.sql import SparkSession
+
+try:
+    print(f"Connecting to Spark using: {java_home}")
+    
+    # We use 'local' and 127.0.0.1 to stay under Zscaler's radar
+    spark = SparkSession.builder \
+        .master("local[*]") \
+        .appName("Java8FinalTest") \
+        .config("spark.driver.host", "127.0.0.1") \
+        .config("spark.ui.enabled", "false") \
+        .getOrCreate()
+
+    print("\n" + "="*30)
+    print("   SPARK IS OFFICIALLY LIVE!   ")
+    print("="*30)
+    
+    # Simple test data
+    spark.createDataFrame([("Java 8", "Working"), ("Spark", "Online")], ["Component", "Status"]).show()
+
+except Exception as e:
+    print("\n--- STILL HAVING A HICCUP ---")
+    print(e)
